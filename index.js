@@ -101,12 +101,13 @@ Geocoder.prototype = {
 
                     client.query({name:"tiger_reverse_geocode", text: "SELECT (pprint_addy(rg.addy[1])) as normalized_address, $1 as lat, $2 as lon, "+
                     "rg.addy[1].address As streetnumber, rg.addy[1].streetname As street, "+
-                    "rg.addy[1].streettypeabbrev As styp, rg.addy[1].location As city, rg.addy[1].stateabbrev As st, rg.addy[1].zip "+
+                    "rg.addy[1].streettypeabbrev As streettype, rg.addy[1].location As city, rg.addy[1].stateabbrev As state, rg.addy[1].zip "+
                     "FROM reverse_geocode(ST_SetSRID(ST_Point($2, $1),4326)) rg",
                     values:[lat, lng]}, function(err, results){
+			if(err) return callback(err);
                         if (results.rows.length == 0)
                         {
-                            //TODO: return not found error
+                            return callback(new Error( "Address not found."), null);
                         }
 
                         var result = results.rows[0];
