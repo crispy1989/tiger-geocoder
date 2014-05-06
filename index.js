@@ -104,6 +104,7 @@ Geocoder.prototype = {
                     "rg.addy[1].streettypeabbrev As streettype, rg.addy[1].location As city, rg.addy[1].stateabbrev As state, rg.addy[1].zip "+
                     "FROM reverse_geocode(ST_SetSRID(ST_Point($2, $1),4326)) rg",
                     values:[lat, lng]}, function(err, results){
+                    done();
 			if(err) return callback(err);
                         if (results.rows.length == 0)
                         {
@@ -219,3 +220,4 @@ function parseResult(options, result, callback){
  */
 
 module.exports = new Geocoder();
+module.exports.pg = pg; // export this to allow modifying postgres connection parameters
