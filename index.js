@@ -89,12 +89,16 @@ Geocoder.prototype = {
 
         if (!options) {options = {};}
         var GeocodeResponse = {};
+        var key = 'geo:' + lat + '-' + lng;
+        var lowResKey = 'geo:' + parseFloat(lat).toFixed(1) + '-' + parseFloat(lng).toFixed(1);
+        var redisKey = options.lowerResolution ? lowResKey : key;
+        var saveLowRes = options.saveLowerResolution || options.lowerResolution;
 
-            redis.get('geo:' + lat + '-' + lng, function (err, result){
-                if(result){
-                    parseResult({format:options.responseFormat || ''}, JSON.parse(result), GeocodeResponse);
-                    return callback(null, GeocodeResponse);
-                }
+        redis.get(redisKey, function (err, result){
+            if(result){
+                parseResult({format:options.responseFormat || ''}, JSON.parse(result), GeocodeResponse);
+                return callback(null, GeocodeResponse);
+            }
             else {
                 pg.connect(conString, function(err, client, done){
                     if(err) { return callback( err, null ); }
@@ -105,7 +109,7 @@ Geocoder.prototype = {
                     "FROM reverse_geocode(ST_SetSRID(ST_Point($2, $1),4326)) rg",
                     values:[lat, lng]}, function(err, results){
                     done();
-			if(err) return callback(err);
+                    if(err) return callback(err);
                         if (results.rows.length == 0)
                         {
                             return callback(new Error( "Address not found."), null);
@@ -116,10 +120,14 @@ Geocoder.prototype = {
                         parseResult({format:options.responseFormat || ''}, result, GeocodeResponse);
 
                         //push to redis, if available
-                        redis.set('geo:' + lat + '-' + lng, JSON.stringify(result), function(err, res){
-                            redis.expire('geo:' + lat + '-' + lng, options.cacheTTL || 2592000);  //if ttl is not provided we expire it in 30 days
-
-                            return callback(null, GeocodeResponse);
+                        redis.set(key, JSON.stringify(result), function(err, res){
+                            redis.expire(key, options.cacheTTL || 2592000); //default ttl of 3 days
+                            if(!saveLowRes) return callback(null, GeocodeResponse);
+													
+                            redis.set(lowResKey, JSON.stringify(result), function(err, res){
+                                redis.expire(lowResKey, options.cacheTTL || 2592000);  //default ttl of 3 days
+                                return callback(null, GeocodeResponse);
+                            });
                         });
                     });
                 });
