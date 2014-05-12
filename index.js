@@ -94,42 +94,53 @@ Geocoder.prototype = {
         var redisKey = options.lowerResolution ? lowResKey : key;
         var saveLowRes = options.saveLowerResolution || options.lowerResolution;
 
-        redis.get(redisKey, function (err, result){
+        function doQuery() {
+            pg.connect(conString, function(err, client, done){
+                if(err) { return callback( err, null ); }
+
+                client.query({name:"tiger_reverse_geocode", text: "SELECT (pprint_addy(rg.addy[1])) as normalized_address, $1 as lat, $2 as lon, "+
+                "rg.addy[1].address As streetnumber, rg.addy[1].streetname As street, "+
+                "rg.addy[1].streettypeabbrev As streettype, rg.addy[1].location As city, rg.addy[1].stateabbrev As state, rg.addy[1].zip "+
+                "FROM reverse_geocode(ST_SetSRID(ST_Point($2, $1),4326)) rg",
+                values:[lat, lng]}, function(err, results){
+                done();
+                if(err) return callback(err);
+                    if (results.rows.length == 0)
+                    {
+                        return callback(new Error( "Address not found."), null);
+                    }
+                 var result = results.rows[0];
+                    //hydrate GeocodeResponse, a structure that follows Google Maps API v3 format
+                    parseResult({format:options.responseFormat || ''}, result, GeocodeResponse);
+                    //push to redis, if available
+                    redis.set(key, JSON.stringify(result), function(err, res){
+                        redis.expire(key, options.cacheTTL || 2592000); //default ttl of 3 days
+                        if(!saveLowRes) return callback(null, GeocodeResponse);
+									
+                        redis.set(lowResKey, JSON.stringify(result), function(err, res){
+                            redis.expire(lowResKey, options.cacheTTL || 2592000);  //default ttl of 3 days
+                            return callback(null, GeocodeResponse);
+                        });
+                    });
+                });
+            });
+        }
+
+        // Try to get exact key
+        redis.get(key, function (err, result){
             if(result){
                 parseResult({format:options.responseFormat || ''}, JSON.parse(result), GeocodeResponse);
                 return callback(null, GeocodeResponse);
             }
             else {
-                pg.connect(conString, function(err, client, done){
-                    if(err) { return callback( err, null ); }
-
-                    client.query({name:"tiger_reverse_geocode", text: "SELECT (pprint_addy(rg.addy[1])) as normalized_address, $1 as lat, $2 as lon, "+
-                    "rg.addy[1].address As streetnumber, rg.addy[1].streetname As street, "+
-                    "rg.addy[1].streettypeabbrev As streettype, rg.addy[1].location As city, rg.addy[1].stateabbrev As state, rg.addy[1].zip "+
-                    "FROM reverse_geocode(ST_SetSRID(ST_Point($2, $1),4326)) rg",
-                    values:[lat, lng]}, function(err, results){
-                    done();
-                    if(err) return callback(err);
-                        if (results.rows.length == 0)
-                        {
-                            return callback(new Error( "Address not found."), null);
-                        }
-
-                        var result = results.rows[0];
-                        //hydrate GeocodeResponse, a structure that follows Google Maps API v3 format
-                        parseResult({format:options.responseFormat || ''}, result, GeocodeResponse);
-
-                        //push to redis, if available
-                        redis.set(key, JSON.stringify(result), function(err, res){
-                            redis.expire(key, options.cacheTTL || 2592000); //default ttl of 3 days
-                            if(!saveLowRes) return callback(null, GeocodeResponse);
-													
-                            redis.set(lowResKey, JSON.stringify(result), function(err, res){
-                                redis.expire(lowResKey, options.cacheTTL || 2592000);  //default ttl of 3 days
-                                return callback(null, GeocodeResponse);
-                            });
-                        });
-                    });
+                if(!options.lowerResolution) return doQuery();
+                // If lower resolution is acceptable, try to get that
+                redis.get(lowResKey, function(err, result) {
+                    if(result) {
+                        parseResult({format:options.responseFormat || ''}, JSON.parse(result), GeocodeResponse);
+                        return callback(null, GeocodeResponse);
+                    }
+                    doQuery();
                 });
             }
         });
