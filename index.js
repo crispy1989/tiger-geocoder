@@ -91,8 +91,8 @@ Geocoder.prototype = {
         var GeocodeResponse = {};
         var key = 'geo:' + lat + '-' + lng;
         var lowResKey = 'geo:' + parseFloat(lat).toFixed(1) + '-' + parseFloat(lng).toFixed(1);
-        var redisKey = options.lowerResolution ? lowResKey : key;
-        var saveLowRes = options.saveLowerResolution || options.lowerResolution;
+        var redisKey = options.lowerAccuracy ? lowResKey : key;
+        var saveLowRes = options.saveLowerAccuracy || options.lowerAccuracy;
 
         function doQuery() {
             pg.connect(conString, function(err, client, done){
@@ -133,7 +133,7 @@ Geocoder.prototype = {
                 return callback(null, GeocodeResponse);
             }
             else {
-                if(!options.lowerResolution) return doQuery();
+                if(!options.lowerAccuracy) return doQuery();
                 // If lower resolution is acceptable, try to get that
                 redis.get(lowResKey, function(err, result) {
                     if(result) {
