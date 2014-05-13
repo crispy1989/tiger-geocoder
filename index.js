@@ -90,9 +90,9 @@ Geocoder.prototype = {
         if (!options) {options = {};}
         var GeocodeResponse = {};
         var key = 'geo:' + lat + '-' + lng;
-        var lowResKey = 'geo:' + parseFloat(lat).toFixed(1) + '-' + parseFloat(lng).toFixed(1);
-        var redisKey = options.lowerAccuracy ? lowResKey : key;
-        var saveLowRes = options.saveLowerAccuracy || options.lowerAccuracy;
+        var lowAccuracyKey = 'geo:' + parseFloat(lat).toFixed(1) + '-' + parseFloat(lng).toFixed(1);
+        var redisKey = options.lowerAccuracy ? lowAccuracyKey : key;
+        var saveLowAccuracy = options.saveLowerAccuracy || options.lowerAccuracy;
 
         function doQuery() {
             pg.connect(conString, function(err, client, done){
@@ -115,10 +115,10 @@ Geocoder.prototype = {
                     //push to redis, if available
                     redis.set(key, JSON.stringify(result), function(err, res){
                         redis.expire(key, options.cacheTTL || 2592000); //default ttl of 3 days
-                        if(!saveLowRes) return callback(null, GeocodeResponse);
+                        if(!saveLowAccuracy) return callback(null, GeocodeResponse);
 									
-                        redis.set(lowResKey, JSON.stringify(result), function(err, res){
-                            redis.expire(lowResKey, options.cacheTTL || 2592000);  //default ttl of 3 days
+                        redis.set(lowAccuracyKey, JSON.stringify(result), function(err, res){
+                            redis.expire(lowAccuracyKey, options.cacheTTL || 2592000);  //default ttl of 3 days
                             return callback(null, GeocodeResponse);
                         });
                     });
