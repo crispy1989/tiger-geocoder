@@ -135,7 +135,7 @@ Geocoder.prototype = {
             else {
                 if(!options.lowerAccuracy) return doQuery();
                 // If lower resolution is acceptable, try to get that
-                redis.get(lowResKey, function(err, result) {
+                redis.get(lowAccuracyKey, function(err, result) {
                     if(result) {
                         parseResult({format:options.responseFormat || ''}, JSON.parse(result), GeocodeResponse);
                         return callback(null, GeocodeResponse);
